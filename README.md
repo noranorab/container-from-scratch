@@ -12,4 +12,5 @@ A namespace limits what a process can see:
   <li>User IDs</li>
 </ul>
 
+inspired by @Liz Rice
 @noranorab on 30/09/2023
