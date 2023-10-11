@@ -52,7 +52,7 @@ func run() {
 func child() {
 	fmt.Printf("Running %v as user %d in process %d\n", os.Args[2:], os.Geteuid(), os.Getpid())
 
-	must(syscall.Chroot("/home/nora/alpinefs/alpine-minirootfs"))
+	must(syscall.Chroot("/home/nora/Bureau/Perso/os/ubuntu-base-14.04-core-amd64"))
 	must(os.Chdir("/"))
 	must(syscall.Mount("proc", "proc", "proc", 0, ""))
 
