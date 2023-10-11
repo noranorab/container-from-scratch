@@ -22,26 +22,26 @@ type ContainerConfig struct {
 
 type Container interface {
 	//Start the container
-	Start() error
+	start() error
 
 	//Stop the container
-	Stop() error
+	stop() error
 
 	//Kill the container
-	Kill() error
+	kill() error
 
 	//Remove the container, deleting its resources
-	Remove() error
+	remove() error
 
 	//Excecute a command within the container
-	Exec(command string) (string, error)
+	exec(command string) (string, error)
 
 	//Get the current status of the container
-	Status() string
+	status() string
 
 	//Get container ID
-	ID() string
+	id() string
 
 	//Create a new container instance
-	Create(config ContainerConfig) (Container, error)
+	create(config ContainerConfig) (Container, error)
 }
