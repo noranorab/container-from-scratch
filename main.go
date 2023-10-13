@@ -14,7 +14,7 @@ func main() {
 	case "run":
 		run()
 	case "child":
-		child("app.js")
+		child("/mnt/app.js")
 	default:
 		panic("I am confused")
 	}
@@ -23,7 +23,12 @@ func main() {
 
 func run() {
 
+	//mount workspace
+
+	must(syscall.Mount("/home/nora/Bureau/docker-try/container-from-scratch", "/home/nora/Bureau/Perso/os/ubuntu-base-14.04-core-amd64/mnt", "", syscall.MS_BIND, ""))
+
 	//create a container
+	fmt.Printf("\nWorkspace mounted....\n")
 	createContainer()
 
 	//run app in the container
@@ -33,9 +38,12 @@ func run() {
 func child(appPath string) {
 	fmt.Printf("Running %v as user %d in process %d\n", os.Args[2:], os.Geteuid(), os.Getpid())
 
+	fmt.Println("child running")
 	must(syscall.Chroot("/home/nora/Bureau/Perso/os/ubuntu-base-14.04-core-amd64"))
+	fmt.Println("child still running")
 	must(os.Chdir("/"))
 	must(syscall.Mount("proc", "proc", "proc", 0, ""))
+	//mount workspace to the container
 
 	cmd := exec.Command("/usr/local/node/node-v10.24.1-linux-x64/bin/node", appPath)
 	cmd.Stdin = os.Stdin
@@ -72,6 +80,7 @@ func createContainer() {
 		},
 	}
 	must(cmd.Run())
+	fmt.Println("parent done")
 
 }
 
