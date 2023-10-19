@@ -2,9 +2,12 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"syscall"
+
+	"kernel.org/pub/linux/libs/security/libcap/cap"
 )
 
 // go run main.go run 		<command> <args>
@@ -14,6 +17,8 @@ func main() {
 	case "run":
 		run()
 	case "child":
+		ensureNotEUID()
+
 		child("/mnt/app.js")
 	default:
 		panic("I am confused")
@@ -24,28 +29,76 @@ func main() {
 func run() {
 
 	//mount workspace
+	fmt.Printf("I have just began")
+	must(syscall.Mount("/home/nora/Bureau/Perso/container-from-scratch", "/home/nora/Bureau/Perso/os/ubuntu-base-14.04-core-amd64/mnt", "", syscall.MS_BIND, ""))
 
-	must(syscall.Mount("/home/nora/Bureau/docker-try/container-from-scratch", "/home/nora/Bureau/Perso/os/ubuntu-base-14.04-core-amd64/mnt", "", syscall.MS_BIND, ""))
-
-	//create a container
 	fmt.Printf("\nWorkspace mounted....\n")
+	//create a container
+
 	createContainer()
 
 	//run app in the container
 
 }
+func ensureNotEUID() {
+	euid := syscall.Geteuid()
+	uid := syscall.Getuid()
+	egid := syscall.Getegid()
+	gid := syscall.Getgid()
+	if uid != euid || gid != egid {
+		log.Fatalf("go runtime is setuid uids:(%d vs %d), gids(%d vs %d)", uid, euid, gid, egid)
+	}
+	if uid == 0 {
+		log.Fatalf("go runtime is running as root - cheating")
+	}
+
+}
 
 func child(appPath string) {
+
 	fmt.Printf("Running %v as user %d in process %d\n", os.Args[2:], os.Geteuid(), os.Getpid())
 
 	fmt.Println("child running")
+	// Get the current capabilities
+	c := cap.GetProc()
+
+	if err := c.SetFlag(cap.Effective, true, cap.SYS_CHROOT); err != nil {
+		log.Fatalf("Failed to set effetive capability: %v", err)
+	}
+	if err := c.SetFlag(cap.Permitted, true, cap.SYS_CHROOT); err != nil {
+		log.Fatalf("Failed to set permitted capability: %v", err)
+	}
+
+	// Re-check the capabilities (SYS_CHROOT should now be effective)
+	c = cap.GetProc()
+
+	log.Printf("this process has these caps: %s", c)
+
+	// Check if the capability is granted
+	if on, _ := c.GetFlag(cap.Effective, cap.SYS_CHROOT); !on {
+		log.Fatalf("Insufficient effective privilege to execute syscall.Chroot - required capability not granted")
+	}
+	if on, _ := c.GetFlag(cap.Permitted, cap.SYS_CHROOT); !on {
+		log.Fatalf("Insufficient permitted privilege to execute syscall.Chroot - required capability not granted")
+	}
+
+	// Execute the syscall.Chroot operation
 	must(syscall.Chroot("/home/nora/Bureau/Perso/os/ubuntu-base-14.04-core-amd64"))
+
+	// Remove SYS_CHROOT capability
+	// if err := c.SetFlag(cap.Effective, false, cap.SYS_CHROOT); err != nil {
+	// 	log.Fatalf("Failed to remove capability: %v", err)
+	// }
+
+	// Check the capabilities after removing SYS_CHROOT
+	c = cap.GetProc()
+	log.Printf("this process has these caps: %s", c)
 	fmt.Println("child still running")
 	must(os.Chdir("/"))
 	must(syscall.Mount("proc", "proc", "proc", 0, ""))
 	//mount workspace to the container
 
-	cmd := exec.Command("/usr/local/node/node-v10.24.1-linux-x64/bin/node", appPath)
+	cmd := exec.Command("/usr/local/lib/node-v10.24.1/bin/node", appPath)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -56,7 +109,10 @@ func child(appPath string) {
 
 func createContainer() {
 	fmt.Printf("Running %v as user %d in process %d\n", os.Args[2:], os.Geteuid(), os.Getpid())
+	fmt.Println("parent calling child")
+	c := cap.GetProc()
 
+	log.Printf("this parent process has these caps: %s", c)
 	cmd := exec.Command("/proc/self/exe", append([]string{"child"}, os.Args[2:]...)...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
@@ -79,7 +135,10 @@ func createContainer() {
 			},
 		},
 	}
+	fmt.Println("parent setting environment for child")
+
 	must(cmd.Run())
+
 	fmt.Println("parent done")
 
 }
